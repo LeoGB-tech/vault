@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vault</title>
+<meta name="theme-color" content="#0e0c16">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0e0c16; --panel:#151222; --panel2:#1d1932; --line:#2b2542;
+  --text:#ece8f6; --mute:#8f88a8; --iris:#9a8cff; --gold:#f0c987; --danger:#ff7d8d;
+  --serif:'Instrument Serif',Georgia,serif;
+  --sans:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{background:var(--ink);color:var(--text);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(900px 520px at 72% -12%,rgba(154,140,255,.2),transparent 62%),
+             radial-gradient(640px 420px at -5% 105%,rgba(240,201,135,.08),transparent 60%)}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+:focus-visible{outline:2px solid var(--iris);outline-offset:2px}
+.hidden{display:none!important}
+::selection{background:var(--iris);color:#12101f}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#2b2542;border-radius:9px}
+
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:var(--panel);transition:background .15s,border-color .15s,transform .1s}
+.btn:hover{border-color:#43395f;background:var(--panel2)}
+.btn:active{transform:scale(.97)}
+.btn.pri{background:var(--iris);border-color:var(--iris);color:#12101f;font-weight:600}
+.btn.pri:hover{background:#b0a5ff}
+.btn.ghost{background:transparent}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#240a10;font-weight:600}
+.btn.sm{padding:6px 12px;font-size:13px}
+input.in,textarea.in{width:100%;background:#0f0c1b;border:1px solid var(--line);border-radius:10px;padding:11px 14px;outline:none}
+input.in:focus,textarea.in:focus{border-color:var(--iris)}
+
+/* écrans de démarrage */
+.screen{position:relative;z-index:1;min-height:100vh;display:grid;place-items:center;padding:24px}
+.box{width:min(460px,100%);background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:18px;padding:34px;box-shadow:0 40px 80px -30px #000}
+.box.wide{width:min(720px,100%)}
+.logo{font-family:var(--serif);font-size:38px;letter-spacing:.01em;line-height:1}
+.box h1{font-family:var(--serif);font-weight:400;font-size:40px;line-height:1.1;margin:22px 0 8px}
+.box p{color:var(--mute);margin-bottom:18px}
+.box label{display:block;font-size:13px;color:var(--mute);margin:14px 0 6px}
+.box .row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+.box textarea{height:150px;font:12px/1.5 ui-monospace,Consolas,monospace;resize:vertical}
+.err{color:var(--danger);font-size:13px;margin-top:12px;min-height:18px}
+.link{color:var(--mute);font-size:13px;text-decoration:underline;margin-top:16px;display:inline-block}
+
+/* application */
+#app{position:relative;z-index:1;display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.side{position:sticky;top:0;height:100vh;padding:28px 22px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:22px;background:rgba(14,12,22,.6);backdrop-filter:blur(10px)}
+.side .tag{color:var(--mute);font-size:13px;margin-top:6px}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav button{text-align:left;padding:9px 12px;border-radius:10px;color:var(--mute);transition:.15s}
+.nav button:hover{background:var(--panel);color:var(--text)}
+.nav button.on{background:var(--panel2);color:var(--text);box-shadow:inset 2px 0 0 var(--gold)}
+.grow{flex:1}
+.quota .bar{height:6px;border-radius:9px;background:var(--panel2);overflow:hidden;margin:8px 0}
+.quota .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--iris),var(--gold));width:0;transition:width .5s}
+.quota small{color:var(--mute);font-size:12.5px}
+.side .btn{width:100%;justify-content:center}
+.side .stack{display:flex;flex-direction:column;gap:8px}
+
+main{padding:30px 38px 120px;min-width:0}
+.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.search{flex:1;min-width:200px;max-width:420px;position:relative}
+.search input{padding-left:16px;border-radius:999px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--panel)}
+.seg button{padding:6px 16px;border-radius:999px;color:var(--mute);font-size:14px}
+.seg button.on{background:var(--panel2);color:var(--text)}
+.sp{flex:1}
+.addwrap{position:relative}
+
+.head{margin:34px 0 8px}
+.head h1{font-family:var(--serif);font-weight:400;font-size:clamp(40px,6vw,72px);line-height:1;letter-spacing:-.01em;overflow-wrap:anywhere}
+.head .sub{color:var(--mute);margin-top:10px}
+.crumbs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;font-size:14px;color:var(--mute)}
+.crumbs button{padding:3px 8px;border-radius:8px;color:var(--mute)}
+.crumbs button:hover,.crumbs button.over{background:var(--panel2);color:var(--text)}
+.crumbs span{opacity:.5;padding:3px 0}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 22px}
+.chip{padding:5px 14px;border-radius:999px;border:1px solid var(--line);color:var(--mute);font-size:13.5px}
+.chip:hover{color:var(--text)}
+.chip.on{border-color:var(--gold);color:var(--gold)}
+
+#grid.files{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:22px}
+#grid.gallery{column-width:250px;column-gap:20px}
+
+.card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;transition:transform .18s,border-color .18s,box-shadow .18s;min-width:0}
+.card:hover{transform:translateY(-3px);border-color:rgba(240,201,135,.5);box-shadow:0 22px 40px -22px #000,0 0 0 1px rgba(240,201,135,.12)}
+.card.folder{box-shadow:7px -7px 0 -2px var(--panel2),14px -14px 0 -4px #181430}
+.card.folder:hover{box-shadow:7px -7px 0 -2px var(--panel2),14px -14px 0 -4px #181430,0 22px 40px -22px #000}
+.card.over{border-color:var(--iris);box-shadow:0 0 0 2px var(--iris)}
+.card.sel{border-color:var(--iris);background:var(--panel2)}
+.art{aspect-ratio:1;border-radius:3px;overflow:hidden;background:hsl(var(--h,250) 35% 11%);position:relative;display:grid;place-items:center}
+.art img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .45s;display:block}
+.art img.in{opacity:1}
+.ext{font-family:var(--serif);font-style:italic;font-size:clamp(26px,3.2vw,42px);color:hsl(var(--h,250) 75% 80%);padding:0 8px;overflow:hidden;max-width:100%;text-overflow:ellipsis}
+.mos{display:grid;width:100%;height:100%;gap:3px;grid-template-columns:1fr 1fr;grid-auto-rows:1fr}
+.mos.m1{grid-template-columns:1fr}
+.mos.m3 img:first-child{grid-column:1/3}
+.nm{margin-top:10px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{color:var(--mute);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chk,.more{position:absolute;top:16px;z-index:2;opacity:0;transition:.15s}
+.chk{left:16px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:rgba(14,12,22,.55);backdrop-filter:blur(4px)}
+.chk::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--iris);transform:scale(0);transition:.15s}
+.card.sel .chk::after{transform:scale(1)}
+.more{right:16px;width:28px;height:28px;border-radius:50%;background:rgba(14,12,22,.65);backdrop-filter:blur(4px);line-height:24px;font-size:18px}
+.card:hover .chk,.card:hover .more,.card.sel .chk,body.selmode .chk{opacity:1}
+@media(hover:none){.more,.chk{opacity:1}}
+
+figure.g{break-inside:avoid;margin:0 0 20px;position:relative;border-radius:4px;overflow:hidden;cursor:pointer;background:var(--panel);border:1px solid var(--line);transition:border-color .2s,transform .2s}
+figure.g:hover{border-color:rgba(240,201,135,.6);transform:scale(1.01)}
+figure.g img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .5s}
+figure.g img.in{opacity:1}
+figure.g figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px 12px 10px;background:linear-gradient(transparent,rgba(8,6,14,.85));font-size:13px;opacity:0;transition:.2s}
+figure.g:hover figcaption{opacity:1}
+
+.empty{text-align:center;padding:90px 20px;color:var(--mute)}
+.empty b{display:block;font-family:var(--serif);font-weight:400;font-size:34px;color:var(--text);margin-bottom:8px}
+
+/* superpositions */
+#drop{position:fixed;inset:14px;z-index:60;border:2px dashed var(--gold);border-radius:22px;background:rgba(14,12,22,.82);backdrop-filter:blur(6px);display:none;place-items:center;pointer-events:none;font-family:var(--serif);font-size:44px;text-align:center}
+#drop.on{display:grid}
+#drop small{display:block;font:15px var(--sans);color:var(--mute);margin-top:6px}
+.pop{position:fixed;z-index:80;min-width:190px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 24px 50px -10px #000}
+.pop button{display:block;width:100%;text-align:left;padding:8px 12px;border-radius:8px}
+.pop button:hover{background:rgba(154,140,255,.16)}
+.pop button.d{color:var(--danger)}
+#modal{position:fixed;inset:0;z-index:90;background:rgba(8,6,14,.7);backdrop-filter:blur(4px);display:none;place-items:center;padding:20px}
+#modal.on{display:grid}
+.dlg{width:min(440px,100%);background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:26px}
+.dlg h3{font-family:var(--serif);font-weight:400;font-size:28px;margin-bottom:8px}
+.dlg p{color:var(--mute);margin-bottom:14px}
+.dlg input{width:100%;background:#0f0c1b;border:1px solid var(--line);border-radius:10px;padding:10px 14px;outline:none;margin:6px 0 4px}
+.dlg .row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+#selbar{position:fixed;left:50%;bottom:26px;transform:translate(-50%,160%);z-index:50;display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 10px 8px 20px;box-shadow:0 20px 50px -10px #000;transition:transform .25s}
+#selbar.on{transform:translate(-50%,0)}
+#job{position:fixed;right:22px;bottom:22px;z-index:70;width:min(340px,calc(100% - 44px));background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px;display:none;box-shadow:0 20px 50px -10px #000}
+#job.on{display:block}
+#job b{display:block;font-weight:600}
+#job small{color:var(--mute);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+#job .bar{height:5px;border-radius:9px;background:var(--panel);margin-top:12px;overflow:hidden}
+#job .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--iris),var(--gold));transition:width .2s}
+#toast{position:fixed;left:50%;top:20px;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;align-items:center}
+#toast div{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:9px 18px;box-shadow:0 14px 30px -10px #000;animation:tin .25s}
+#toast div.err{border-color:var(--danger);color:var(--danger)}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}}
+
+#viewer{position:fixed;inset:0;z-index:75;background:rgba(7,5,12,.96);display:none;grid-template-rows:1fr auto}
+#viewer.on{display:grid}
+.vbody{min-height:0;display:grid;place-items:center;padding:24px 70px;position:relative}
+.vbody img,.vbody video{max-width:100%;max-height:100%;border-radius:4px;box-shadow:0 30px 80px -20px #000;background:#000}
+.vbody iframe{width:min(1000px,100%);height:100%;border:0;border-radius:8px;background:#fff}
+.vbody audio{width:min(520px,100%)}
+.vinfo{text-align:center}
+.vinfo .ext{font-size:90px}
+.vnav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.07);font-size:22px}
+.vnav:hover{background:rgba(255,255,255,.16)}
+.vnav.l{left:12px}.vnav.r{right:12px}
+.vbar{display:flex;gap:14px;align-items:center;padding:14px 22px;border-top:1px solid var(--line);flex-wrap:wrap}
+.vbar .t{flex:1;min-width:160px}
+.vbar .t b{font-family:var(--serif);font-weight:400;font-size:24px;display:block;overflow-wrap:anywhere}
+.vbar .t span{color:var(--mute);font-size:13px}
+
+/* Écran partagé externe */
+#sharedView{position:fixed;inset:0;z-index:200;background:var(--ink);display:flex;flex-direction:column;padding:30px;overflow-y:auto}
+#sharedView .sh-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:16px}
+#sharedView .sh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:20px}
+
+@media(max-width:860px){
+  #app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:16px 18px;border-right:0;border-bottom:1px solid var(--line)}
+  .side .nav,.side .tag,.side .grow{display:none}
+  .side .quota{flex:1;min-width:160px}
+  .side .stack{flex-direction:row;width:auto}
+  .side .btn{width:auto}
+  main{padding:20px 16px 120px}
+  .vbody{padding:16px 10px}
+  #grid.files{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+#viewer{height:100vh;height:100dvh;overflow:hidden;grid-template-rows:minmax(0,1fr) auto}#viewer .vbody{min-width:0;min-height:0;padding:0;overflow:hidden}#viewer .vmedia{position:absolute;inset:20px 60px;display:flex;align-items:center;justify-content:center;overflow:hidden}#viewer .vmedia>img,#viewer .vmedia>video{width:100%;height:100%;object-fit:contain;min-height:0;box-shadow:none;background:transparent}#viewer .vbar{position:relative;z-index:3;background:var(--panel);max-height:45dvh;overflow:auto}#viewer .vbar .t{min-width:0}#viewer .vbar .t b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#viewer .vnav{z-index:2}@media(max-width:600px){#viewer .vmedia{inset:10px 50px}#viewer .vbar{gap:8px;padding:10px}#viewer .vbar .t{flex-basis:100%}}
+</style>
+</head>
+<body>
+
+<!-- Réglages Supabase -->
+<div id="setup" class="screen hidden">
+  <div class="box wide">
+    <div class="logo">Vault</div>
+    <h1>Branche ton cloud</h1>
+    <p>Deux minutes, une seule fois. Dans ton projet Supabase : colle le script ci-dessous dans <b>SQL Editor</b> puis <b>Run</b>. Ensuite, recopie l'URL et la clé « anon / publishable » (Project Settings, API).</p>
+    <textarea id="sqlBox" class="in" readonly></textarea>
+    <div class="row" style="margin-top:10px"><button class="btn sm" id="copySql">Copier le script</button></div>
+    <label for="cfgUrl">URL du projet</label>
+    <input id="cfgUrl" class="in" placeholder="https://xxxx.supabase.co" autocomplete="off">
+    <label for="cfgKey">Clé anon / publishable</label>
+    <input id="cfgKey" class="in" placeholder="eyJ... ou sb_publishable_..." autocomplete="off">
+    <div class="err" id="cfgErr"></div>
+    <div class="row"><button class="btn pri" id="cfgSave">Enregistrer</button></div>
+  </div>
+</div>
+
+<!-- Connexion -->
+<div id="auth" class="screen hidden">
+  <div class="box">
+    <div class="logo">Vault</div>
+    <h1>Tout ce que tu as fait, gardé au calme.</h1>
+    <p>Connecte-toi pour ouvrir ton coffre.</p>
+    <label for="aMail">E-mail</label>
+    <input id="aMail" class="in" type="email" autocomplete="email">
+    <label for="aPass">Mot de passe</label>
+    <input id="aPass" class="in" type="password" autocomplete="current-password">
+    <div class="err" id="aErr"></div>
+    <div class="row">
+      <button class="btn pri" id="aIn">Entrer</button>
+      <button class="btn ghost" id="aUp">Créer le compte</button>
+    </div>
+    <button class="link" id="aCfg">Changer le projet Supabase</button>
+  </div>
+</div>
+
+<!-- Application -->
+<div id="app" class="hidden">
+  <aside class="side">
+    <div>
+      <div class="logo">Vault</div>
+      <div class="tag">Ton atelier dans le cloud</div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-nav="root" class="on">Atelier</button>
+      <button data-nav="images">Toutes les images</button>
+    </nav>
+    <div class="grow"></div>
+    <div class="quota">
+      <small id="qTxt">0 o utilisé</small>
+      <div class="bar"><i id="qBar"></i></div>
+    </div>
+    <div class="stack">
+      <button class="btn" id="btnArchive" title="Choisis un dossier du PC : il est envoyé, vérifié, puis vidé">Archiver puis vider un dossier</button>
+      <button class="btn ghost" id="btnOut">Se déconnecter</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <div class="search"><input id="q" class="in" type="search" placeholder="Rechercher dans tout le coffre" aria-label="Rechercher"></div>
+      <div class="seg" id="seg">
+        <button data-v="files" class="on">Fichiers</button>
+        <button data-v="gallery">Galerie</button>
+      </div>
+      <div class="sp"></div>
+      <button class="btn" id="btnNew">Nouveau dossier</button>
+      <div class="addwrap">
+        <button class="btn pri" id="btnAdd">Ajouter</button>
+      </div>
+    </div>
+
+    <section class="head">
+      <div class="crumbs" id="crumbs"></div>
+      <h1 id="title">Atelier</h1>
+      <div class="sub" id="subtitle"></div>
+    </section>
+
+    <div class="chips" id="chips">
+      <button class="chip on" data-f="all">Tout</button>
+      <button class="chip" data-f="image">Images</button>
+      <button class="chip" data-f="folder">Dossiers</button>
+      <button class="chip" data-f="app">Apps et archives</button>
+      <button class="chip" data-f="other">Autres fichiers</button>
+    </div>
+
+    <div id="grid" class="files"></div>
+    <div id="empty" class="empty hidden"></div>
+  </main>
+</div>
+
+<!-- Mode Partage Publique (si un lien de partage est ouvert) -->
+<div id="sharedView" class="hidden">
+  <div class="sh-head">
+    <div>
+      <div class="logo">Vault</div>
+      <p style="color:var(--mute);font-size:13px;margin-top:4px">Espace partagé temporaire (valide 7 jours)</p>
+    </div>
+    <div id="shTitle" style="font-family:var(--serif);font-size:28px"></div>
+  </div>
+  <div id="shGrid" class="sh-grid"></div>
+</div>
+
+<div id="drop"><div>Lâche pour envoyer<small>Fichiers ou dossiers entiers</small></div></div>
+<div id="viewer"></div>
+<div id="modal"></div>
+<div id="selbar"><span id="selTxt"></span>
+  <button class="btn sm" id="selGet">Récupérer</button>
+  <button class="btn sm danger" id="selDel">Supprimer</button>
+  <button class="btn sm ghost" id="selClr">Annuler</button>
+</div>
+<div id="job"><b id="jobT"></b><small id="jobS"></small><div class="bar"><i id="jobB"></i></div></div>
+<div id="toast"></div>
+<input type="file" id="fFiles" multiple hidden>
+<input type="file" id="fDir" webkitdirectory hidden>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+'use strict';
+const SQL = `-- Vault : à coller une seule fois dans Supabase > SQL Editor > Run
+
+create table if not exists public.vault_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  parent_id uuid references public.vault_items(id) on delete cascade,
+  kind text not null check (kind in ('file','folder')),
+  name text not null,
+  size bigint not null default 0,
+  mime text,
+  has_thumb boolean not null default false,
+  w int,
+  h int,
+  pin text default null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists vault_items_user_parent on public.vault_items(user_id, parent_id);
+
+alter table public.vault_items enable row level security;
+
+drop policy if exists "vault_items_own" on public.vault_items;
+create policy "vault_items_own" on public.vault_items
+  for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+insert into storage.buckets (id, name, public)
+values ('vault', 'vault', false)
+on conflict (id) do nothing;
+
+drop policy if exists "vault_objects_own" on storage.objects;
+create policy "vault_objects_own" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'vault' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'vault' and (storage.foldername(name))[1] = auth.uid()::text);`;
+const QUOTA = 1e9; // 1 Go.
+
+/* ---------- utilitaires ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => crypto.randomUUID();
+const ext = n => { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(i + 1).toLowerCase() : ''; };
+const safeName = n => n.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+function fmtSize(b) {
+  if (!b) return '0 o';
+  if (b < 1024) return b + ' o';
+  const u = ['Ko', 'Mo', 'Go', 'To']; let i = -1;
+  do { b /= 1024; i++; } while (b >= 1024 && i < 3);
+  return b.toLocaleString('fr-FR', { maximumFractionDigits: b < 10 ? 1 : 0 }) + ' ' + u[i];
+}
+const fmtDate = s => new Date(s).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+const plural = (n, a, b) => n + ' ' + (n > 1 ? b : a);
+function toast(msg, kind) {
+  const d = document.createElement('div'); d.textContent = msg; if (kind) d.className = kind;
+  $('#toast').append(d); setTimeout(() => d.remove(), kind === 'err' ? 6000 : 3200);
+}
+
+const EXT = {
+  app: ['exe','msi','apk','dmg','appimage','bat','ipa','jar','deb'],
+  archive: ['zip','rar','7z','tar','gz'],
+  audio: ['mp3','flac','wav','ogg','m4a','aac'],
+  video: ['mp4','mkv','mov','webm','avi'],
+  doc: ['pdf','doc','docx','txt','md','xls','xlsx','ppt','pptx','csv'],
+  art: ['ptg','psd','kra','xcf','clip','ai','sai','blend'],
+  code: ['js','ts','py','html','css','json','lua','cs','cpp','java','rs','go']
+};
+const HUE = { app:150, archive:35, audio:285, video:340, doc:210, art:265, code:185, other:240, folder:45, image:250 };
+function cat(i) {
+  if (i.kind === 'folder') return 'folder';
+  if (i.has_thumb) return 'image';
+  const e = ext(i.name);
+  for (const k in EXT) if (EXT[k].includes(e)) return k;
+  return (i.mime || '').startsWith('image/') ? 'art' : 'other';
+}
+const FILTERS = {
+  all: () => true, image: c => c === 'image', folder: c => c === 'folder',
+  app: c => c === 'app' || c === 'archive',
+  other: c => !['image', 'folder', 'app', 'archive'].includes(c)
+};
+
+/* ---------- état ---------- */
+let sb, user, cfg;
+let items = [], byId = new Map(), kids = new Map(), prev = new Map(), tot = new Map(), used = 0;
+let cur = null, view = 'files', filter = 'all', query = '', onlyImages = false;
+const sel = new Set();
+let dragIds = null;
+
+// Liste des IDs déverrouillés pendant la session active (jusqu'au rechargement de la page)
+const unlockedPins = new Set();
+
+function rebuild() {
+  byId = new Map(items.map(i => [i.id, i]));
+  kids = new Map(); prev = new Map(); tot = new Map(); used = 0;
+  for (const i of items) {
+    const k = i.parent_id || null;
+    if (!kids.has(k)) kids.set(k, []);
+    kids.get(k).push(i);
+  }
+  for (const i of items) {
+    if (i.kind !== 'file') continue;
+    used += i.size;
+    let p = i.parent_id, guard = 0;
+    while (p && guard++ < 200) {
+      tot.set(p, (tot.get(p) || 0) + i.size);
+      if (i.has_thumb) { const a = prev.get(p) || []; if (a.length < 4) { a.push(i.id); prev.set(p, a); } }
+      p = byId.get(p)?.parent_id || null;
+    }
+  }
+}
+
+// Vérifie si un élément est verrouillé (et non déverrouillé dans la session)
+function isLocked(item) {
+  if (!item) return false;
+  let p = item.id, g = 0;
+  while (p && g++ < 200) {
+    const it = byId.get(p);
+    if (it && it.pin && !unlockedPins.has(it.id)) return true;
+    p = it?.parent_id || null;
+  }
+  return false;
+}
+
+// Vérifie le PIN et déverrouille pour la session si correct
+async function verifyPinForItem(item) {
+  if (!isLocked(item)) return true;
+  let target = item;
+  let p = item.id, g = 0;
+  while (p && g++ < 200) {
+    const it = byId.get(p);
+    if (it && it.pin && !unlockedPins.has(it.id)) { target = it; break; }
+    p = it?.parent_id || null;
+  }
+  const inputPin = await dialog({ title: 'Élément protégé', text: `Entrez le code PIN pour déverrouiller « ${target.name} » :`, input: '', type: 'password', ok: 'Déverrouiller' });
+  if (inputPin === target.pin) {
+    unlockedPins.add(target.id);
+    render();
+    return true;
+  } else if (inputPin !== null) {
+    toast('Code PIN incorrect', 'err');
+  }
+  return false;
+}
+
+function isUnder(item, folderId) {
+  if (!folderId) return true;
+  let p = item.parent_id, g = 0;
+  while (p && g++ < 200) { if (p === folderId) return true; p = byId.get(p)?.parent_id || null; }
+  return false;
+}
+function descendants(id, acc = new Set()) {
+  acc.add(id);
+  for (const k of kids.get(id) || []) descendants(k.id, acc);
+  return acc;
+}
+
+/* ---------- URLs signées + vignettes ---------- */
+const urlCache = new Map();
+async function signed(paths) {
+  const need = paths.filter(p => !(urlCache.get(p)?.exp > Date.now()));
+  for (let i = 0; i < need.length; i += 100) {
+    const { data } = await sb.storage.from('vault').createSignedUrls(need.slice(i, i + 100), 3600);
+    (data || []).forEach(d => { if (d.signedUrl) urlCache.set(d.path, { url: d.signedUrl, exp: Date.now() + 3300e3 }); });
+  }
+  return paths.map(p => urlCache.get(p)?.url);
+}
+const pend = new Set(); let pendT;
+const io = new IntersectionObserver(es => {
+  for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); pend.add(e.target); }
+  clearTimeout(pendT); pendT = setTimeout(flushThumbs, 60);
+}, { rootMargin: '500px' });
+async function flushThumbs() {
+  const els = [...pend]; pend.clear();
+  const urls = await signed(els.map(el => `${user.id}/t_${el.dataset.tid}.jpg`));
+  els.forEach((el, i) => { if (urls[i]) { el.onload = () => el.classList.add('in'); el.src = urls[i]; } });
+}
+
+/* ---------- rendu ---------- */
+function visible() {
+  let list;
+  if (query) {
+    const matchedByPin = items.filter(i => i.pin && i.pin.toLowerCase() === query);
+    if (matchedByPin.length > 0) {
+      list = matchedByPin;
+    } else {
+      list = items.filter(i => !isLocked(i) && i.name.toLowerCase().includes(query));
+    }
+  } else if (view === 'gallery' || onlyImages) {
+    list = items.filter(i => !isLocked(i) && cat(i) === 'image' && isUnder(i, cur));
+  } else {
+    // Affiche les éléments du dossier courant qui ne sont pas verrouillés (ou qui ont été déverrouillés)
+    list = (kids.get(cur) || []).filter(i => !isLocked(i));
+  }
+  
+  if (view === 'files' && !onlyImages && !query) list = list.filter(i => FILTERS[filter](cat(i)));
+  return [...list].sort((a, b) => {
+    if ((a.kind === 'folder') !== (b.kind === 'folder')) return a.kind === 'folder' ? -1 : 1;
+    if (a.kind === 'folder') return a.name.localeCompare(b.name, 'fr', { numeric: true });
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+}
+function cardHTML(i) {
+  const c = cat(i);
+  let art;
+  if (c === 'folder') {
+    const pv = prev.get(i.id) || [];
+    art = pv.length
+      ? `<div class="mos m${pv.length}">${pv.map(p => `<img data-tid="${p}" alt="">`).join('')}</div>`
+      : `<div class="ext">dossier</div>`;
+  } else if (c === 'image') art = `<img data-tid="${i.id}" alt="${esc(i.name)}">`;
+  else art = `<div class="ext">.${esc(ext(i.name) || 'fichier')}</div>`;
+  
+  const sub = c === 'folder'
+    ? `${plural((kids.get(i.id) || []).length, 'élément', 'éléments')} · ${fmtSize(tot.get(i.id) || 0)}`
+    : `${fmtSize(i.size)} · ${fmtDate(i.created_at)}`;
+
+  // Ajout discret d'une icône de cadenas si le dossier a un PIN
+  const lockBadge = i.pin ? `<div style="position:absolute;bottom:10px;right:12px;background:rgba(255,125,141,.2);color:var(--danger);font-size:11px;padding:2px 8px;border-radius:999px;backdrop-filter:blur(4px);z-index:2">🔒 Protégé</div>` : '';
+
+  return `<article class="card ${c === 'folder' ? 'folder' : ''} ${sel.has(i.id) ? 'sel' : ''}" data-id="${i.id}" draggable="true" tabindex="0">
+    <button class="chk" data-act="sel" aria-label="Sélectionner"></button>
+    <button class="more" data-act="menu" aria-label="Actions">⋯</button>
+    <div class="art" style="--h:${HUE[c]}">${art}</div>
+    <div class="nm" title="${esc(i.name)}">${esc(i.name)}</div><div class="sub">${sub}</div>${lockBadge}</article>`;
+}
+function galleryHTML(i) {
+  const r = i.w && i.h ? `${i.w}/${i.h}` : '1';
+  return `<figure class="g" data-id="${i.id}" style="aspect-ratio:${r}"><img data-tid="${i.id}" alt="${esc(i.name)}"><figcaption>${esc(i.name)}</figcaption></figure>`;
+}
+function render() {
+  const list = visible();
+  const grid = $('#grid');
+  grid.className = view === 'gallery' ? 'gallery' : 'files';
+  grid.innerHTML = list.map(view === 'gallery' ? galleryHTML : cardHTML).join('');
+  $$('#grid img[data-tid]').forEach(im => io.observe(im));
+
+  // titre + fil d'Ariane
+  const chain = []; let p = cur, g = 0;
+  while (p && g++ < 200) { const f = byId.get(p); if (!f) break; chain.unshift(f); p = f.parent_id; }
+  $('#crumbs').innerHTML = [`<button data-go="" class="crumb">Atelier</button>`]
+    .concat(chain.map(f => `<span>/</span><button data-go="${f.id}" class="crumb">${esc(f.name)}</button>`)).join('');
+  $('#title').textContent = query ? `Recherche : « ${query} »` : onlyImages ? 'Toutes les images' : cur ? byId.get(cur)?.name : 'Atelier';
+  const sz = list.reduce((a, i) => a + (i.kind === 'file' ? i.size : (tot.get(i.id) || 0)), 0);
+  $('#subtitle').textContent = `${plural(list.length, 'pièce', 'pièces')} · ${fmtSize(sz)}`;
+  $('#chips').classList.toggle('hidden', view === 'gallery' || onlyImages || !!query);
+  $$('#chips .chip').forEach(c => c.classList.toggle('on', c.dataset.f === filter));
+  $$('#seg button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
+  $$('#nav button').forEach(b => b.classList.toggle('on', (b.dataset.nav === 'images') === onlyImages));
+
+  // vide
+  const e = $('#empty');
+  e.classList.toggle('hidden', list.length > 0);
+  e.innerHTML = query ? `<b>Rien trouvé</b>Aucun élément ne correspond à cette recherche.`
+    : `<b>Rien ici pour l'instant</b>Glisse des fichiers ou un dossier entier dans la fenêtre, ou utilise « Ajouter ».`;
+
+  // quota
+  $('#qTxt').textContent = `${fmtSize(used)} utilisés sur ${fmtSize(QUOTA)}`;
+  $('#qBar').style.width = Math.min(100, used / QUOTA * 100) + '%';
+
+  // sélection
+  for (const id of [...sel]) if (!byId.has(id)) sel.delete(id);
+  $('#selbar').classList.toggle('on', sel.size > 0);
+  $('#selTxt').textContent = plural(sel.size, 'sélectionné', 'sélectionnés');
+  document.body.classList.toggle('selmode', sel.size > 0);
+}
+
+/* ---------- navigation ---------- */
+async function go(id) {
+  if (id) {
+    const it = byId.get(id);
+    if (it && !(await verifyPinForItem(it))) return;
+  }
+  location.hash = id ? '#' + id : '#'; if (!id && !location.hash) render();
+}
+function syncHash() {
+  const id = location.hash.slice(1);
+  cur = id && byId.get(id)?.kind === 'folder' ? id : null;
+  query = ''; $('#q').value = ''; sel.clear();
+  if (user) render();
+}
+window.addEventListener('hashchange', syncHash);
+
+/* ---------- dialogues ---------- */
+function dialog({ title, text = '', input = null, type = 'text', ok = 'OK', danger = false }) {
+  return new Promise(res => {
+    const m = $('#modal');
+    m.innerHTML = `<div class="dlg" role="dialog" aria-modal="true"><h3>${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}
+      ${input !== null ? `<input id="dlgIn" type="${type}" value="${esc(input)}" autocomplete="new-password">` : ''}
+      <div class="row"><button class="btn ghost" data-r="0">Annuler</button><button class="btn ${danger ? 'danger' : 'pri'}" data-r="1" id="dlgOk">${esc(ok)}</button></div></div>`;
+    m.classList.add('on');
+    const inp = $('#dlgIn');
+    if (inp) {
+      inp.value = '';
+      inp.focus();
+    } else {
+      $('#dlgOk').focus();
+    }
+    const done = v => { m.classList.remove('on'); m.innerHTML = ''; m.onclick = m.onkeydown = null; res(v); };
+    const val = () => inp ? (inp.value.trim() || null) : true;
+    m.onclick = e => { const b = e.target.closest('[data-r]'); if (b) done(b.dataset.r === '1' ? val() : null); else if (e.target === m) done(null); };
+    m.onkeydown = e => { if (e.key === 'Escape') done(null); else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') done(val()); };
+  });
+}
+function popMenu(entries, x, y) {
+  closePop();
+  const p = document.createElement('div'); p.className = 'pop'; p.id = 'pop';
+  p.innerHTML = entries.map((e, i) => `<button data-i="${i}" class="${e[2] ? 'd' : ''}">${esc(e[0])}</button>`).join('');
+  document.body.append(p);
+  const r = p.getBoundingClientRect();
+  p.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+  p.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  p.onclick = e => { const b = e.target.closest('[data-i]'); if (b) { closePop(); entries[+b.dataset.i][1](); } };
+}
+function closePop() { $('#pop')?.remove(); }
+document.addEventListener('click', e => { if (!e.target.closest('#pop') && !e.target.closest('[data-act="menu"]') && !e.target.closest('#btnAdd')) closePop(); });
+
+/* ---------- sélection / clics ---------- */
+function toggleSel(id) { sel.has(id) ? sel.delete(id) : sel.add(id); render(); }
+async function openItem(id) {
+  const it = byId.get(id); if (!it) return;
+  if (!(await verifyPinForItem(it))) return;
+  
+  if (it.kind === 'folder') { onlyImages = false; view = view === 'gallery' ? 'files' : view; go(id); }
+  else openViewer(id);
+}
+
+/* Code PIN & Partage */
+async function setPin(id) {
+  const it = byId.get(id); if (!it) return;
+  if (it.pin && !(await verifyPinForItem(it))) return;
+  const pin = await dialog({ title: 'Code PIN de verrouillage', text: 'Entrez un code PIN pour bloquer la visibilité (laissez vide pour retirer) :', input: '', type: 'password', ok: 'Enregistrer' });
+  if (pin === null) return;
+  
+  const newPin = (pin === '' || !pin) ? null : pin.trim();
+  
+  const { error } = await sb.from('vault_items').update({ pin: newPin }).eq('id', id);
+  if (error) return toast(error.message, 'err');
+  
+  it.pin = newPin;
+  if (!newPin) unlockedPins.delete(id);
+  
+  rebuild();
+  render();
+  toast(newPin ? 'Code PIN activé (élément masqué)' : 'Code PIN retiré');
+}
+
+async function shareItem(id) {
+  const it = byId.get(id); if (!it) return;
+  if (!(await verifyPinForItem(it))) return;
+  
+  const exp = Math.floor((Date.now() + 7 * 24 * 3600 * 1000) / 1000);
+  const shareUrl = `${location.origin}${location.pathname}?s=${it.id}&e=${exp}`;
+  
+  await navigator.clipboard.writeText(shareUrl);
+  dialog({ 
+    title: 'Lien de partage généré !', 
+    text: `Ce lien donne accès uniquement à « ${it.name} » pendant 1 semaine :\n\n${shareUrl}\n\n(Le lien a été copié dans votre presse-papier)`, 
+    ok: 'D\'accord' 
+  });
+}
+
+function openMenu(id, x, y) {
+  const it = byId.get(id); if (!it) return;
+  const ids = sel.has(id) && sel.size > 1 ? [...sel] : [id];
+  popMenu([
+    [it.kind === 'folder' ? 'Ouvrir' : 'Aperçu', () => openItem(id)],
+    [it.pin ? 'Modifier/Enlever PIN' : 'Mettre un code PIN 🔒', () => setPin(id)],
+    ['Partager (1 sem.) 🔗', () => shareItem(id)],
+    [ids.length > 1 ? `Récupérer (${ids.length})` : 'Récupérer', () => restore(ids)],
+    ['Renommer', () => rename(id)],
+    [ids.length > 1 ? `Supprimer (${ids.length})` : 'Supprimer', () => removeItems(ids), true]
+  ], x, y);
+}
+
+$('#grid').addEventListener('click', e => {
+  const el = e.target.closest('[data-id]'); if (!el) return;
+  const id = el.dataset.id, act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'sel') return toggleSel(id);
+  if (act === 'menu') { const r = e.target.getBoundingClientRect(); return openMenu(id, r.left - 120, r.bottom + 4); }
+  if (sel.size) return toggleSel(id);
+  openItem(id);
+});
+$('#grid').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('.card')) { sel.size ? toggleSel(e.target.dataset.id) : openItem(e.target.dataset.id); }
+});
+$('#grid').addEventListener('contextmenu', e => {
+  const el = e.target.closest('[data-id]'); if (!el) return;
+  e.preventDefault(); openMenu(el.dataset.id, e.clientX, e.clientY);
+});
+$('#crumbs').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) { onlyImages = false; go(b.dataset.go); } });
+$('#chips').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (b) { filter = b.dataset.f; render(); } });
+$('#seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { view = b.dataset.v; render(); } });
+$('#nav').addEventListener('click', e => {
+  const b = e.target.closest('[data-nav]'); if (!b) return;
+  onlyImages = b.dataset.nav === 'images'; query = ''; $('#q').value = '';
+  if (!onlyImages) { cur = null; location.hash = '#'; }
+  render();
+});
+$('#q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
+$('#selClr').onclick = () => { sel.clear(); render(); };
+$('#selGet').onclick = () => restore([...sel]);
+$('#selDel').onclick = () => removeItems([...sel]);
+addEventListener('keydown', e => { if (e.key === 'Escape' && sel.size && !$('#viewer').classList.contains('on') && !$('#modal').classList.contains('on')) { sel.clear(); render(); } });
+
+/* ---------- glisser-déposer interne (déplacer) ---------- */
+$('#grid').addEventListener('dragstart', e => {
+  const c = e.target.closest('.card'); if (!c) return;
+  const id = c.dataset.id; dragIds = sel.has(id) ? [...sel] : [id];
+  e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'vault');
+});
+addEventListener('dragend', () => { dragIds = null; $$('.over').forEach(x => x.classList.remove('over')); });
+function dropTarget(e) { return e.target.closest('.card.folder') || e.target.closest('.crumb'); }
+document.addEventListener('dragover', e => {
+  if (!dragIds) return;
+  const t = dropTarget(e); $$('.over').forEach(x => x !== t && x.classList.remove('over'));
+  if (t) { e.preventDefault(); t.classList.add('over'); }
+});
+document.addEventListener('drop', e => {
+  if (!dragIds) return;
+  const t = dropTarget(e); if (!t) return;
+  e.preventDefault(); e.stopPropagation();
+  const target = t.classList.contains('crumb') ? (t.dataset.go || null) : t.dataset.id;
+  const ids = dragIds; dragIds = null; $$('.over').forEach(x => x.classList.remove('over'));
+  moveItems(ids, target);
+}, true);
+
+async function moveItems(ids, target) {
+  const bad = ids.some(id => id === target || (byId.get(id)?.kind === 'folder' && target && descendants(id).has(target)));
+  if (bad) return toast('Impossible de déplacer un dossier dans lui-même.', 'err');
+  ids = ids.filter(id => (byId.get(id)?.parent_id || null) !== target);
+  if (!ids.length) return;
+  const { error } = await sb.from('vault_items').update({ parent_id: target }).in('id', ids);
+  if (error) return toast(error.message, 'err');
+  ids.forEach(id => { byId.get(id).parent_id = target; });
+  sel.clear(); rebuild(); render(); toast(plural(ids.length, 'élément déplacé', 'éléments déplacés'));
+}
+
+/* ---------- dossier, renommer, supprimer ---------- */
+async function newFolder() {
+  const name = await dialog({ title: 'Nouveau dossier', input: '', ok: 'Créer' });
+  if (!name) return;
+  const row = { id: uid(), user_id: user.id, parent_id: cur, kind: 'folder', name, size: 0, created_at: new Date().toISOString() };
+  const { error } = await sb.from('vault_items').insert(row);
+  if (error) return toast(error.message, 'err');
+  items.push(row); rebuild(); render();
+}
+async function rename(id) {
+  const it = byId.get(id);
+  if (!(await verifyPinForItem(it))) return;
+  const n = await dialog({ title: 'Renommer', input: it.name, ok: 'Renommer' });
+  if (!n || n === it.name) return;
+  const { error } = await sb.from('vault_items').update({ name: n }).eq('id', id);
+  if (error) return toast(error.message, 'err');
+  it.name = n; render(); if ($('#viewer').classList.contains('on')) showV();
+}
+async function removeItems(ids) {
+  ids = ids.filter(id => byId.has(id)); if (!ids.length) return;
+  for (const id of ids) {
+    if (!(await verifyPinForItem(byId.get(id)))) return;
+  }
+  const all = new Set(); ids.forEach(id => descendants(id, all));
+  const files = [...all].map(id => byId.get(id)).filter(i => i.kind === 'file');
+  const label = ids.length === 1 ? `« ${esc(byId.get(ids[0]).name)} »` : plural(ids.length, 'élément', 'éléments');
+  const ok = await dialog({
+    title: 'Supprimer du cloud ?',
+    text: `${label}${files.length > 1 || byId.get(ids[0]).kind === 'folder' ? ` (${plural(files.length, 'fichier', 'fichiers')}, ${fmtSize(files.reduce((a, f) => a + f.size, 0))})` : ''} sera supprimé définitivement. Il n'y a pas de corbeille.`,
+    ok: 'Supprimer', danger: true
+  });
+  if (!ok) return;
+  for (let i = 0; i < ids.length; i += 100) {
+    const { error } = await sb.from('vault_items').delete().in('id', ids.slice(i, i + 100));
+    if (error) return toast(error.message, 'err');
+  }
+  const paths = files.flatMap(f => [`${user.id}/${f.id}`, f.has_thumb ? `${user.id}/t_${f.id}.jpg` : null]).filter(Boolean);
+  for (let i = 0; i < paths.length; i += 100) await sb.storage.from('vault').remove(paths.slice(i, i + 100));
+  items = items.filter(i => !all.has(i.id)); sel.clear(); rebuild(); render();
+  if ($('#viewer').classList.contains('on')) closeV();
+  toast('Supprimé');
+}
+
+/* ---------- envoi ---------- */
+function jobUI(title, pct, sub) {
+  const j = $('#job'); j.classList.add('on');
+  $('#jobT').textContent = title; $('#jobS').textContent = sub || ''; $('#jobB').style.width = pct + '%';
+}
+const jobEnd = () => setTimeout(() => $('#job').classList.remove('on'), 900);
+
+async function makeThumb(file) {
+  if (!file.type.startsWith('image/') || file.size > 120e6) return null;
+  try {
+    const bmp = await createImageBitmap(file);
+    const s = Math.min(1, 560 / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * s)), h = Math.max(1, Math.round(bmp.height * s));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d'); x.fillStyle = '#151222'; x.fillRect(0, 0, w, h); x.drawImage(bmp, 0, 0, w, h);
+    const ow = bmp.width, oh = bmp.height; bmp.close?.();
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .84));
+    return blob ? { blob, w: ow, h: oh } : null;
+  } catch { return null; }
+}
+async function sendOne(task, parentId) {
+  const file = task.file || await task.handle.getFile();
+  const name = task.name || file.name;
+  const id = uid(), path = `${user.id}/${id}`;
+  const up = await sb.storage.from('vault').upload(path, file, { contentType: file.type || 'application/octet-stream', cacheControl: '3600', upsert: false });
+  if (up.error) throw up.error;
+  let has = false, w = null, h = null;
+  const t = await makeThumb(file);
+  if (t) {
+    const r = await sb.storage.from('vault').upload(`${user.id}/t_${id}.jpg`, t.blob, { contentType: 'image/jpeg' });
+    if (!r.error) { has = true; w = t.w; h = t.h; }
+  }
+  const row = { id, user_id: user.id, parent_id: parentId, kind: 'file', name, size: file.size, mime: file.type || null, has_thumb: has, w, h, created_at: new Date().toISOString() };
+  const ins = await sb.from('vault_items').insert(row);
+  if (ins.error) { await sb.storage.from('vault').remove([path, `${user.id}/t_${id}.jpg`]); throw ins.error; }
+  items.push(row);
+  task.id = id; task.size = file.size; task.ok = true;
+}
+async function pool(list, n, fn) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, list.length) }, async () => { while (i < list.length) await fn(list[i++]); }));
+}
+
+async function uploadJob(tree, parentId, title) {
+  const allDirs = new Set();
+  const addDir = p => { if (!p) return; const parts = p.split('/'); for (let k = 1; k <= parts.length; k++) allDirs.add(parts.slice(0, k).join('/')); };
+  tree.dirs.forEach(addDir); tree.files.forEach(f => addDir(f.dirs.join('/')));
+  const dirIds = new Map(), rows = [];
+  [...allDirs].sort((a,b)=>a.split('/').length-b.split('/').length).forEach(p=>{
+    const parts=p.split('/');
+    const parent=parts.length===1?parentId:dirIds.get(parts.slice(0,-1).join('/'));
+    const existing=items.find(x=>x.kind==='folder' && x.name===parts.at(-1) && (x.parent_id||null)===(parent||null));
+    const id=existing?existing.id:uid();dirIds.set(p,id);
+    if(!existing)rows.push({id,user_id:user.id,parent_id:parent,kind:'folder',name:parts.at(-1),size:0,created_at:new Date().toISOString()});
+  });
+  for (let i = 0; i < rows.length; i += 200) {
+    const { error } = await sb.from('vault_items').insert(rows.slice(i, i + 200));
+    if (error) { toast(error.message, 'err'); return { failed: tree.files, ok: [] }; }
+  }
+  items.push(...rows);
+
+  const failed = []; let done = 0; const total = tree.files.length;
+  jobUI(title, 0, `0 / ${total}`);
+  await pool(tree.files, 1, async t => {
+    try { await sendOne(t, t.dirs.length ? dirIds.get(t.dirs.join('/')) : parentId); }
+    catch (e) { failed.push({ t, e }); }
+    done++; jobUI(title, done / total * 100, `${done} / ${total} · ${t.name || t.file?.name || ''}`);
+  });
+  rebuild(); render(); jobEnd();
+  if (failed.length) toast(`${plural(failed.length, 'fichier a échoué', 'fichiers ont échoué')} : ${failed[0].e.message || failed[0].e}`, 'err');
+  else toast(`${plural(total, 'fichier envoyé', 'fichiers envoyés')}`);
+  return { failed, ok: tree.files.filter(t => t.ok) };
+}
+
+/* lecture d'un dépôt glissé (fichiers + dossiers) */
+function grabEntries(dt) { return [...dt.items].filter(i => i.kind === 'file').map(i => i.webkitGetAsEntry?.()).filter(Boolean); }
+async function readTree(entries) {
+  const tree = { files: [], dirs: [] };
+  async function walk(en, dirs) {
+    if (en.isFile) { const file = await new Promise((res, rej) => en.file(res, rej)); tree.files.push({ file, dirs }); }
+    else {
+      const d = [...dirs, en.name]; tree.dirs.push(d.join('/'));
+      const rd = en.createReader(); let batch;
+      do { batch = await new Promise((res, rej) => rd.readEntries(res, rej)); for (const e of batch) await walk(e, d); } while (batch.length);
+    }
+  }
+  for (const e of entries) await walk(e, []);
+  return tree;
+}
+
+let dragDepth = 0;
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+addEventListener('dragenter', e => { if (!user || dragIds || !hasFiles(e)) return; dragDepth++; $('#drop').classList.add('on'); });
+addEventListener('dragleave', e => { if (!user || dragIds || !hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('#drop').classList.remove('on'); } });
+addEventListener('dragover', e => { if (user && !dragIds && hasFiles(e)) e.preventDefault(); });
+addEventListener('drop', async e => {
+  if (!user || dragIds || !hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('#drop').classList.remove('on');
+  const onFolder = e.target.closest?.('.card.folder')?.dataset.id || cur;
+  const entries = grabEntries(e.dataTransfer);
+  const loose = entries.length ? null : [...e.dataTransfer.files].map(file => ({ file, dirs: [] }));
+  const tree = loose ? { files: loose, dirs: [] } : await readTree(entries);
+  if (tree.files.length || tree.dirs.length) uploadJob(tree, onFolder, 'Envoi vers le cloud');
+});
+$('#btnAdd').onclick = e => {
+  const r = e.currentTarget.getBoundingClientRect();
+  popMenu([
+    ['Des fichiers…', () => $('#fFiles').click()], 
+    ['Un dossier entier…', () => $('#fDir').click()]
+  ], r.left - 60, r.bottom + 6);
+};
+$('#fFiles').onchange = e => { const f = [...e.target.files].map(file => ({ file, dirs: [] })); e.target.value = ''; if (f.length) uploadJob({ files: f, dirs: [] }, cur, 'Envoi vers le cloud'); };
+$('#fDir').onchange = e => {
+  const f = [...e.target.files].map(file => ({ file, dirs: file.webkitRelativePath.split('/').slice(0, -1) }));
+  e.target.value = ''; if (f.length) uploadJob({ files: f, dirs: [] }, cur, 'Envoi du dossier');
+};
+$('#btnNew').onclick = newFolder;
+
+/* ---------- récupérer ---------- */
+async function downloadOne(it) {
+  const { data, error } = await sb.storage.from('vault').createSignedUrl(`${user.id}/${it.id}`, 120, { download: it.name });
+  if (error) return toast(error.message, 'err');
+  const a = document.createElement('a'); a.href = data.signedUrl; a.download = it.name; document.body.append(a); a.click(); a.remove();
+}
+function flatten(targets) {
+  const out = [];
+  (function rec(list, base) {
+    for (const it of list) {
+      const rel = [...base, safeName(it.name)];
+      out.push({ item: it, rel });
+      if (it.kind === 'folder') rec(kids.get(it.id) || [], rel);
+    }
+  })(targets, []);
+  return out;
+}
+async function restore(ids) {
+  const targets = ids.map(i => byId.get(i)).filter(Boolean); if (!targets.length) return;
+  for (const t of targets) {
+    if (!(await verifyPinForItem(t))) return;
+  }
+  if (targets.length === 1 && targets[0].kind === 'file') return downloadOne(targets[0]);
+  const nodes = flatten(targets), fileNodes = nodes.filter(n => n.item.kind === 'file');
+  const bytes = fileNodes.reduce((a, n) => a + n.item.size, 0);
+  const label = `${plural(fileNodes.length, 'fichier', 'fichiers')} · ${fmtSize(bytes)}`;
+  let failed = 0, done = 0;
+
+  if (window.showDirectoryPicker) {
+    let root;
+    try { root = await showDirectoryPicker({ mode: 'readwrite', id: 'vault-restore' }); } catch { return; }
+    jobUI('Récupération sur le PC', 0, label);
+    await signed(fileNodes.map(n => `${user.id}/${n.item.id}`));
+    const dirCache = new Map([['', root]]);
+    async function dirFor(rel) {
+      let key = '', h = root;
+      for (const part of rel) { key += '/' + part; if (!dirCache.has(key)) dirCache.set(key, await h.getDirectoryHandle(part, { create: true })); h = dirCache.get(key); }
+      return h;
+    }
+    for (const n of nodes) if (n.item.kind === 'folder') await dirFor(n.rel);
+    await pool(fileNodes, 3, async n => {
+      try {
+        const dh = await dirFor(n.rel.slice(0, -1));
+        const url = (await signed([`${user.id}/${n.item.id}`]))[0];
+        const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status);
+        const w = await (await dh.getFileHandle(n.rel.at(-1), { create: true })).createWritable();
+        await r.body.pipeTo(w);
+      } catch (e) { failed++; console.error(e); }
+      done++; jobUI('Récupération sur le PC', done / fileNodes.length * 100, `${done} / ${fileNodes.length} · ${n.item.name}`);
+    });
+    jobEnd();
+    toast(failed ? `${plural(failed, 'fichier a échoué', 'fichiers ont échoué')}.` : `Récupéré dans « ${root.name} »`, failed ? 'err' : '');
+    return;
+  }
+
+  // repli : archive .zip
+  if (bytes > 1.5e9) return toast('Trop gros pour un zip dans ce navigateur. Utilise Chrome ou Edge pour récupérer directement dans un dossier.', 'err');
+  jobUI('Préparation du zip', 0, label);
+  const zip = new JSZip();
+  await signed(fileNodes.map(n => `${user.id}/${n.item.id}`));
+  for (const n of nodes) if (n.item.kind === 'folder') zip.folder(n.rel.join('/'));
+  await pool(fileNodes, 3, async n => {
+    try {
+      const url = (await signed([`${user.id}/${n.item.id}`]))[0];
+      const r = await fetch(url); if (!r.ok) throw new Error();
+      zip.file(n.rel.join('/'), await r.blob());
+    } catch { failed++; }
+    done++; jobUI('Préparation du zip', done / fileNodes.length * 95, `${done} / ${fileNodes.length}`);
+  });
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = (targets.length === 1 ? safeName(targets[0].name) : 'vault') + '.zip'; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  jobEnd(); if (failed) toast(`${plural(failed, 'fichier manquant', 'fichiers manquants')} dans le zip.`, 'err');
+}
+
+/* ---------- archiver puis vider un dossier du PC ---------- */
+async function remoteSizes() {
+  const map = new Map();
+  for (let off = 0; ; off += 1000) {
+    const { data, error } = await sb.storage.from('vault').list(user.id, { limit: 1000, offset: off, sortBy: { column: 'name', order: 'asc' } });
+    if (error) throw error;
+    data.forEach(o => map.set(o.name, o.metadata?.size));
+    if (data.length < 1000) break;
+  }
+  return map;
+}
+async function archiveLocal() {
+  if (!window.showDirectoryPicker) return toast('Cette fonction demande Chrome, Edge ou Brave sur ordinateur.', 'err');
+  let root;
+  try { root = await showDirectoryPicker({ mode: 'readwrite', id: 'vault-archive' }); } catch { return; }
+  jobUI('Lecture du dossier', 0, root.name);
+  const tree = { files: [], dirs: [root.name] };
+  async function walk(dh, dirs) {
+    for await (const [name, h] of dh.entries()) {
+      if (h.kind === 'file') tree.files.push({ handle: h, name, dirs });
+      else { const d = [...dirs, name]; tree.dirs.push(d.join('/')); await walk(h, d); }
+    }
+  }
+  await walk(root, [root.name]);
+  $('#job').classList.remove('on');
+  if (!tree.files.length) return toast('Ce dossier ne contient aucun fichier.', 'err');
+  const go1 = await dialog({
+    title: `Archiver « ${root.name} » ?`,
+    text: `${plural(tree.files.length, 'fichier part', 'fichiers partent')} dans le cloud${cur ? ' (dans le dossier ouvert)' : ''}. Rien n'est effacé sur ton PC avant la vérification de l'envoi.`,
+    ok: 'Envoyer'
+  });
+  if (!go1) return;
+  const res = await uploadJob(tree, cur, 'Archivage');
+  if (res.failed.length) return toast('Des fichiers ont échoué : ton dossier local n\'a pas été touché.', 'err');
+  jobUI('Vérification', 100, 'Comparaison avec le cloud');
+  let remote;
+  try { remote = await remoteSizes(); } catch (e) { $('#job').classList.remove('on'); return toast('Vérification impossible : ' + e.message + ' Ton dossier local n\'a pas été touché.', 'err'); }
+  $('#job').classList.remove('on');
+  const bad = tree.files.filter(t => remote.get(t.id) !== t.size);
+  if (bad.length) return toast(`${plural(bad.length, 'fichier ne correspond pas', 'fichiers ne correspondent pas')} dans le cloud : ton dossier local n'a pas été touché.`, 'err');
+  const bytes = tree.files.reduce((a, t) => a + t.size, 0);
+  const wipe = await dialog({
+    title: 'Tout est dans le cloud',
+    text: `Vérifié : ${plural(tree.files.length, 'fichier', 'fichiers')}, ${fmtSize(bytes)}. Vider « ${esc(root.name)} » sur ton PC ? Les fichiers seront supprimés sans passer par la corbeille. Tu pourras toujours les récupérer depuis Vault.`,
+    ok: 'Vider le dossier', danger: true
+  });
+  if (!wipe) return;
+  const names = []; for await (const [name] of root.entries()) names.push(name);
+  let errs = 0;
+  for (const n of names) { try { await root.removeEntry(n, { recursive: true }); } catch { errs++; } }
+  toast(errs ? `${plural(errs, 'élément n\'a pas pu être supprimé', 'éléments n\'ont pas pu être supprimés')} (fichier ouvert ailleurs ?).` : 'Dossier vidé sur le PC.', errs ? 'err' : '');
+}
+$('#btnArchive').onclick = archiveLocal;
+
+/* ---------- visionneuse ---------- */
+let vlist = [], vi = 0;
+function openViewer(id) {
+  vlist = visible().filter(i => i.kind === 'file'); vi = vlist.findIndex(i => i.id === id);
+  if (vi < 0) { vlist = [byId.get(id)]; vi = 0; }
+  $('#viewer').classList.add('on'); document.body.style.overflow = 'hidden'; showV();
+}
+function closeV() { $('#viewer').classList.remove('on'); $('#viewer').innerHTML = ''; document.body.style.overflow = ''; }
+async function showV() {
+  const it = vlist[vi]; if (!it) return closeV();
+  const e = ext(it.name), mime = it.mime || '';
+  let body;
+  const url = (await signed([`${user.id}/${it.id}`]))[0];
+  if (it.has_thumb || mime.startsWith('image/')) body = `<img src="${url}" alt="${esc(it.name)}">`;
+  else if (mime.startsWith('video/') || EXT.video.includes(e)) body = `<video src="${url}" controls autoplay></video>`;
+  else if (mime.startsWith('audio/') || EXT.audio.includes(e)) body = `<div class="vinfo"><div class="ext" style="--h:${HUE.audio}">.${esc(e)}</div><audio src="${url}" controls autoplay></audio></div>`;
+  else if (mime === 'application/pdf' || e === 'pdf') body = `<iframe src="${url}" title="${esc(it.name)}"></iframe>`;
+  else body = `<div class="vinfo"><div class="ext" style="--h:${HUE[cat(it)]}">.${esc(e || 'fichier')}</div><p style="color:var(--mute);margin-top:10px">Pas d'aperçu pour ce type de fichier.</p></div>`;
+  $('#viewer').innerHTML = `<div class="vbody">${vi > 0 ? '<button class="vnav l" data-v="-1" aria-label="Précédent">‹</button>' : ''}<div class="vmedia">${body}</div>${vi < vlist.length - 1 ? '<button class="vnav r" data-v="1" aria-label="Suivant">›</button>' : ''}</div>
+    <div class="vbar"><div class="t"><b>${esc(it.name)}</b><span>${fmtSize(it.size)} · ${fmtDate(it.created_at)}</span></div>
+    <button class="btn sm" data-vact="get">Récupérer</button><button class="btn sm" data-vact="ren">Renommer</button><button class="btn sm danger" data-vact="del">Supprimer</button><button class="btn sm ghost" data-vact="x">Fermer</button></div>`;
+}
+$('#viewer').addEventListener('click', e => {
+  const n = e.target.closest('[data-v]'); if (n) { vi += +n.dataset.v; return showV(); }
+  const a = e.target.closest('[data-vact]')?.dataset.vact; const it = vlist[vi];
+  if (a === 'x') closeV(); else if (a === 'get') downloadOne(it); else if (a === 'ren') rename(it.id); else if (a === 'del') removeItems([it.id]);
+  else if (e.target.classList.contains('vbody')) closeV();
+});
+addEventListener('keydown', e => {
+  if (!$('#viewer').classList.contains('on') || $('#modal').classList.contains('on')) return;
+  if (e.key === 'Escape') closeV();
+  else if (e.key === 'ArrowRight' && vi < vlist.length - 1) { vi++; showV(); }
+  else if (e.key === 'ArrowLeft' && vi > 0) { vi--; showV(); }
+});
+
+/* ---------- démarrage / connexion ---------- */
+const show = id => ['setup', 'auth', 'app', 'sharedView'].forEach(s => $('#' + s).classList.toggle('hidden', s !== id));
+function showSetup() {
+  $('#sqlBox').value = SQL; $('#cfgUrl').value = cfg?.url || ''; $('#cfgKey').value = cfg?.key || ''; show('setup');
+}
+$('#copySql').onclick = async () => { await navigator.clipboard.writeText(SQL); toast('Script copié'); };
+$('#cfgSave').onclick = () => {
+  const url = $('#cfgUrl').value.trim().replace(/\/+$/, ''), key = $('#cfgKey').value.trim();
+  if (!/^https:\/\/.+\..+/.test(url) || key.length < 20) { $('#cfgErr').textContent = 'L\'URL doit commencer par https:// et la clé doit être complète.'; return; }
+  localStorage.setItem('vault.cfg', JSON.stringify({ url, key })); location.reload();
+};
+$('#aCfg').onclick = showSetup;
+
+async function enter() {
+  show('app');
+  jobUI('Ouverture du coffre', 40, '');
+  let all = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb.from('vault_items').select('*').order('created_at').range(from, from + 999);
+    if (error) { $('#job').classList.remove('on'); toast(error.message.includes('vault_items') ? 'Table introuvable : lance d\'abord le script SQL.' : error.message, 'err'); break; }
+    all = all.concat(data); if (data.length < 1000) break;
+  }
+  $('#job').classList.remove('on');
+  items = all; rebuild(); syncHash();
+}
+async function authDo(signup) {
+  const email = $('#aMail').value.trim(), password = $('#aPass').value;
+  $('#aErr').textContent = '';
+  if (!email || password.length < 6) { $('#aErr').textContent = 'E-mail et mot de passe (6 caractères minimum) requis.'; return; }
+  const r = signup ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
+  if (r.error) { $('#aErr').textContent = r.error.message; return; }
+  if (!r.data.session) { $('#aErr').textContent = 'Compte créé. Confirme ton e-mail, puis reviens te connecter.'; return; }
+  user = r.data.session.user; enter();
+}
+$('#aIn').onclick = () => authDo(false);
+$('#aUp').onclick = () => authDo(true);
+$('#aPass').addEventListener('keydown', e => { if (e.key === 'Enter') authDo(false); });
+$('#btnOut').onclick = async () => { await sb.auth.signOut(); location.hash = ''; location.reload(); };
+
+/* ---------- GESTION DU MODE PARTAGE EXTERNE ---------- */
+async function handleSharedLink(itemId, expTimestamp) {
+  try {
+    const exp = parseInt(expTimestamp, 10) * 1000;
+    if (isNaN(exp) || Date.now() > exp) {
+      alert('Ce lien de partage a expiré (durée maximale : 1 semaine).');
+      location.href = location.pathname;
+      return;
+    }
+    
+    show('sharedView');
+    
+    const { data: mainItem, error: e1 } = await sb.from('vault_items').select('*').eq('id', itemId).single();
+    if (e1 || !mainItem) {
+      $('#shTitle').textContent = 'Élément indisponible ou supprimé.';
+      return;
+    }
+    
+    $('#shTitle').textContent = mainItem.name;
+    
+    let sharedItems = [mainItem];
+    if (mainItem.kind === 'folder') {
+      const { data: subItems } = await sb.from('vault_items').select('*').eq('user_id', mainItem.user_id);
+      if (subItems) {
+        const subMap = new Map(subItems.map(i => [i.id, i]));
+        const isChild = (item) => {
+          let p = item.parent_id;
+          while (p) {
+            if (p === mainItem.id) return true;
+            p = subMap.get(p)?.parent_id;
+          }
+          return false;
+        };
+        sharedItems = sharedItems.concat(subItems.filter(isChild));
+      }
+    }
+    
+    const container = $('#shGrid');
+    container.innerHTML = sharedItems.map(i => {
+      return `<div class="card" style="cursor:default">
+        <div class="art" style="--h:${HUE[cat(i)]}"><div class="ext">${i.kind === 'folder' ? 'dossier' : '.' + ext(i.name)}</div></div>
+        <div class="nm">${esc(i.name)}</div>
+        <div class="sub">${fmtSize(i.size)}</div>
+        ${i.kind === 'file' ? `<button class="btn sm pri" style="margin-top:8px;width:100%;justify-content:center" onclick="downloadSharedFile('${i.id}', '${mainItem.user_id}', '${esc(i.name)}')">Télécharger</button>` : ''}
+      </div>`;
+    }).join('');
+    
+  } catch (e) {
+    alert('Lien de partage invalide.');
+    location.href = location.pathname;
+  }
+}
+
+window.downloadSharedFile = async function(id, uid, name) {
+  const { data, error } = await sb.storage.from('vault').createSignedUrl(`${uid}/${id}`, 120, { download: name });
+  if (error) return toast('Impossible de télécharger : ' + error.message, 'err');
+  const a = document.createElement('a'); a.href = data.signedUrl; a.download = name; document.body.append(a); a.click(); a.remove();
+};
+
+
+/* Détection des doublons par contenu, dans tout le coffre */
+const vaultHashes = new Map();
+async function contentHash(blob) {
+  if (!crypto.subtle) throw new Error('La détection des doublons nécessite HTTPS ou localhost.');
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), b => b.toString(16).padStart(2,'0')).join('');
+}
+async function storedHash(it) {
+  const key = user.id + '/' + it.id;
+  if (vaultHashes.has(key)) return vaultHashes.get(key);
+  const r = await sb.storage.from('vault').download(key);
+  if (r.error) throw new Error('Vérification impossible de '+it.name+' : '+r.error.message);
+  const h = await contentHash(r.data); vaultHashes.set(key,h); return h;
+}
+async function refreshVaultFiles() {
+  let fresh=[];
+  for(let start=0;;start+=1000){
+    const r=await sb.from('vault_items').select('*').order('id').range(start,start+999);
+    if(r.error) throw r.error;
+    fresh.push(...r.data); if(r.data.length<1000) break;
+  }
+  items=fresh; rebuild();
+}
+const originalSendOne = sendOne;
+sendOne = async function(task,parentId) {
+  task.ok=false; task.skipped=false;
+  const file=task.file || await task.handle.getFile();
+  const hash=await contentHash(file);
+  for(const it of items.filter(x=>x.kind==='file' && Number(x.size)===file.size)) {
+    if(await storedHash(it)===hash) {
+      task.skipped=true; task.existingId=it.id; task.size=file.size; return;
+    }
+  }
+  await originalSendOne(task,parentId);
+  vaultHashes.set(user.id+'/'+task.id,hash);
+};
+const originalUploadJob=uploadJob;
+let vaultQueue=Promise.resolve();
+function enqueueVault(fn){ const next=vaultQueue.then(fn); vaultQueue=next.catch(()=>{}); return next; }
+uploadJob=function(tree,parentId,title){return enqueueVault(async()=>{
+  try {
+    await refreshVaultFiles();
+    const result=await originalUploadJob(tree,parentId,title);
+    const skipped=tree.files.filter(t=>t.skipped).length;
+    const failed=result.failed || [];
+    toast(`${result.ok.length} envoyés · ${skipped} doublons ignorés · ${failed.length} échecs`,failed.length?'err':undefined);
+    if(failed.length){
+      const details=failed.map(f=>({name:f.t?.name || f.t?.file?.name || 'Fichier',error:String(f.e?.message || f.e || 'Erreur de création des dossiers')}));
+      const blob=new Blob([JSON.stringify(details,null,2)],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='rapport-echecs.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+      if(failed.every(f=>f.t) && confirm(details.map(d=>d.name+' : '+d.error).join('\n').slice(0,3500)+'\n\nRéessayer uniquement ces fichiers ?')){
+        setTimeout(()=>uploadJob({files:failed.map(f=>f.t),dirs:tree.dirs},parentId,'Nouvelle tentative'),0);
+      }
+    }
+    return result;
+  }catch(e){jobEnd();toast(e.message || String(e),'err');return {failed:tree.files,ok:[]};}
+});};
+async function cleanVaultDuplicates(){return enqueueVault(async()=>{
+  try{
+    await refreshVaultFiles();
+    const groups=new Map(), duplicates=[];
+    const files=items.filter(x=>x.kind==='file').sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
+    const sizes=new Map();for(const f of files)sizes.set(String(f.size),(sizes.get(String(f.size))||0)+1);
+    let n=0;
+    for(const f of files){
+      jobUI('Analyse des doublons',++n/Math.max(1,files.length)*100,f.name);
+      if(sizes.get(String(f.size))<2)continue;
+      const key=f.size+':'+await storedHash(f);
+      if(groups.has(key))duplicates.push({drop:f,keep:groups.get(key)});else groups.set(key,f);
+    }
+    jobEnd();
+    if(!duplicates.length){toast('Aucun doublon de contenu détecté.');return;}
+    const list=duplicates.map(x=>'SUPPRIMER '+x.drop.name+' ['+x.drop.id+'] — GARDER '+x.keep.name+' ['+x.keep.id+']').join('\n');
+    const report=new Blob([list],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(report);a.download='doublons-a-verifier.txt';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+    if(!confirm(duplicates.length+' copies identiques détectées dans tout le coffre. La plus ancienne sera conservée, même dans un autre dossier. Consulte le rapport téléchargé.\n\nSupprimer définitivement ces copies ?\n\n'+list.slice(0,2500)))return;
+    let removed=0;
+    for(const {drop:f} of duplicates){
+      jobUI('Suppression des doublons',removed/duplicates.length*100,f.name);
+      const paths=[user.id+'/'+f.id];if(f.has_thumb)paths.push(user.id+'/t_'+f.id+'.jpg');
+      const r=await sb.storage.from('vault').remove(paths);if(r.error)throw r.error;
+      const d=await sb.from('vault_items').delete().eq('id',f.id).select('id');if(d.error)throw d.error;
+      if(d.data.length!==1)throw new Error('Suppression des métadonnées non confirmée pour '+f.name);
+      removed++;
+    }
+    await refreshVaultFiles();render();jobEnd();toast(removed+' copies supprimées.');
+  }catch(e){jobEnd();toast(e.message || String(e),'err');}
+});}
+const cleanButton=document.createElement('button');cleanButton.className='btn';cleanButton.textContent='Analyser les doublons';cleanButton.onclick=cleanVaultDuplicates;$('#btnAdd').parentElement.before(cleanButton);
+
+(async function boot() {
+  try { cfg = JSON.parse(localStorage.getItem('vault.cfg') || 'null'); } catch { cfg = null; }
+  if (!cfg) return showSetup();
+  sb = supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true } });
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const shareId = urlParams.get('s');
+  const shareExp = urlParams.get('e');
+  if (shareId && shareExp) {
+    return handleSharedLink(shareId, shareExp);
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) { user = session.user; enter(); } else show('auth');
+})();
+</script>
+</body>
+</html>
