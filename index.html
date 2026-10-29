@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vault</title>
 <meta name="theme-color" content="#0e0c16">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -257,6 +260,7 @@ figure.g:hover figcaption{opacity:1}
         <button data-v="gallery">Galerie</button>
       </div>
       <div class="sp"></div>
+      <button class="btn" id="btnLock" title="Espace protégé" aria-label="Espace protégé">🔒</button>
       <button class="btn" id="btnNew">Nouveau dossier</button>
       <div class="addwrap">
         <button class="btn pri" id="btnAdd">Ajouter</button>
@@ -327,6 +331,8 @@ create table if not exists public.vault_items (
   pin text default null,
   created_at timestamptz not null default now()
 );
+
+alter table public.vault_items add column if not exists pin text default null;
 
 create index if not exists vault_items_user_parent on public.vault_items(user_id, parent_id);
 
@@ -413,7 +419,7 @@ function rebuild() {
   }
   for (const i of items) {
     if (i.kind !== 'file') continue;
-    used += i.size;
+    used += i.size; if (isLocked(i)) continue;
     let p = i.parent_id, guard = 0;
     while (p && guard++ < 200) {
       tot.set(p, (tot.get(p) || 0) + i.size);
@@ -436,24 +442,47 @@ function isLocked(item) {
 }
 
 // Vérifie le PIN et déverrouille pour la session si correct
-async function verifyPinForItem(item) {
-  if (!isLocked(item)) return true;
-  let target = item;
-  let p = item.id, g = 0;
+let spaceCode = null;
+const inSpace = () => !!spaceCode && !cur && !onlyImages && !query && view === 'files';
+const pinHits = c => items.filter(i => i.pin && normPin(i.pin) === normPin(c) && !(byId.get(i.parent_id) && firstLock(byId.get(i.parent_id))));
+const normPin = s => String(s ?? '').trim().toLowerCase();
+function firstLock(item) {
+  let p = item?.id, g = 0;
   while (p && g++ < 200) {
     const it = byId.get(p);
-    if (it && it.pin && !unlockedPins.has(it.id)) { target = it; break; }
+    if (it && it.pin && !unlockedPins.has(it.id)) return it;
     p = it?.parent_id || null;
   }
-  const inputPin = await dialog({ title: 'Élément protégé', text: `Entrez le code PIN pour déverrouiller « ${target.name} » :`, input: '', type: 'password', ok: 'Déverrouiller' });
-  if (inputPin === target.pin) {
-    unlockedPins.add(target.id);
-    render();
-    return true;
-  } else if (inputPin !== null) {
-    toast('Code PIN incorrect', 'err');
+  return null;
+}
+// Re-verrouille tout ce qui n'est pas le dossier ouvert ou l'un de ses parents
+function relock() {
+  const keep = new Set(); let p = cur, g = 0;
+  while (p && g++ < 200) { keep.add(p); p = byId.get(p)?.parent_id || null; }
+  let ch = false;
+  for (const id of [...unlockedPins]) if (!keep.has(id)) { unlockedPins.delete(id); ch = true; }
+  if (ch) rebuild();
+}
+async function verifyPinForItem(item) {
+  let t, n = 0, changed = false;
+  while ((t = firstLock(item)) && n++ < 50) {
+    if (!(spaceCode && normPin(spaceCode) === normPin(t.pin))) {
+      const v = await dialog({ title: 'Élément protégé', text: 'Entrez le code PIN pour déverrouiller « ' + esc(t.name) + ' » :', input: '', type: 'password', ok: 'Déverrouiller' });
+      if (v === null) return false;
+      if (normPin(v) !== normPin(t.pin)) { toast('Code PIN incorrect', 'err'); return false; }
+    }
+    unlockedPins.add(t.id); rebuild(); changed = true;
   }
-  return false;
+  if (changed) render();
+  return !firstLock(item);
+}
+// Demande le code de chaque élément protégé contenu dans une sélection (suppression, récupération)
+async function unlockSubtree(ids) {
+  const all = new Set(); ids.forEach(id => descendants(id, all));
+  const depth = i => { let d = 0, p = i.parent_id; while (p && d < 200) { d++; p = byId.get(p)?.parent_id || null; } return d; };
+  const list = [...all].map(id => byId.get(id)).filter(i => i && i.pin).sort((a, b) => depth(a) - depth(b));
+  for (const i of list) if (!(await verifyPinForItem(i))) return false;
+  return true;
 }
 
 function isUnder(item, folderId) {
@@ -493,12 +522,14 @@ async function flushThumbs() {
 function visible() {
   let list;
   if (query) {
-    const matchedByPin = items.filter(i => i.pin && i.pin.toLowerCase() === query);
+    const matchedByPin = [];
     if (matchedByPin.length > 0) {
       list = matchedByPin;
     } else {
       list = items.filter(i => !isLocked(i) && i.name.toLowerCase().includes(query));
     }
+  } else if (inSpace()) {
+    list = pinHits(spaceCode);
   } else if (view === 'gallery' || onlyImages) {
     list = items.filter(i => !isLocked(i) && cat(i) === 'image' && isUnder(i, cur));
   } else {
@@ -525,7 +556,7 @@ function cardHTML(i) {
   else art = `<div class="ext">.${esc(ext(i.name) || 'fichier')}</div>`;
   
   const sub = c === 'folder'
-    ? `${plural((kids.get(i.id) || []).length, 'élément', 'éléments')} · ${fmtSize(tot.get(i.id) || 0)}`
+    ? `${plural((kids.get(i.id) || []).filter(k => !isLocked(k)).length, 'élément', 'éléments')} · ${fmtSize(tot.get(i.id) || 0)}`
     : `${fmtSize(i.size)} · ${fmtDate(i.created_at)}`;
 
   // Ajout discret d'une icône de cadenas si le dossier a un PIN
@@ -553,8 +584,10 @@ function render() {
   while (p && g++ < 200) { const f = byId.get(p); if (!f) break; chain.unshift(f); p = f.parent_id; }
   $('#crumbs').innerHTML = [`<button data-go="" class="crumb">Atelier</button>`]
     .concat(chain.map(f => `<span>/</span><button data-go="${f.id}" class="crumb">${esc(f.name)}</button>`)).join('');
-  $('#title').textContent = query ? `Recherche : « ${query} »` : onlyImages ? 'Toutes les images' : cur ? byId.get(cur)?.name : 'Atelier';
+  const pinSearch = query && list.length > 0 && list.every(i => i.pin && normPin(i.pin) === normPin(query));
+  $('#title').textContent = query ? (pinSearch ? 'Éléments protégés' : `Recherche : « ${query} »`) : onlyImages ? 'Toutes les images' : inSpace() ? 'Espace protégé' : cur ? byId.get(cur)?.name : 'Atelier';
   const sz = list.reduce((a, i) => a + (i.kind === 'file' ? i.size : (tot.get(i.id) || 0)), 0);
+  $('#btnLock').textContent = spaceCode ? '🔓' : '🔒';
   $('#subtitle').textContent = `${plural(list.length, 'pièce', 'pièces')} · ${fmtSize(sz)}`;
   $('#chips').classList.toggle('hidden', view === 'gallery' || onlyImages || !!query);
   $$('#chips .chip').forEach(c => c.classList.toggle('on', c.dataset.f === filter));
@@ -572,7 +605,7 @@ function render() {
   $('#qBar').style.width = Math.min(100, used / QUOTA * 100) + '%';
 
   // sélection
-  for (const id of [...sel]) if (!byId.has(id)) sel.delete(id);
+  for (const id of [...sel]) if (!byId.has(id) || isLocked(byId.get(id))) sel.delete(id);
   $('#selbar').classList.toggle('on', sel.size > 0);
   $('#selTxt').textContent = plural(sel.size, 'sélectionné', 'sélectionnés');
   document.body.classList.toggle('selmode', sel.size > 0);
@@ -586,16 +619,22 @@ async function go(id) {
   }
   location.hash = id ? '#' + id : '#'; if (!id && !location.hash) render();
 }
-function syncHash() {
+async function syncHash() {
   const id = location.hash.slice(1);
-  cur = id && byId.get(id)?.kind === 'folder' ? id : null;
+  let f = id ? byId.get(id) : null;
+  if (f && f.kind !== 'folder') f = null;
+  if (f && isLocked(f) && !(await verifyPinForItem(f))) {
+    history.replaceState(null, '', location.pathname + location.search); f = null;
+  }
+  cur = f ? f.id : null; spaceCode = null;
   query = ''; $('#q').value = ''; sel.clear();
+  relock();
   if (user) render();
 }
 window.addEventListener('hashchange', syncHash);
 
 /* ---------- dialogues ---------- */
-function dialog({ title, text = '', input = null, type = 'text', ok = 'OK', danger = false }) {
+function dialog({ title, text = '', input = null, type = 'text', ok = 'OK', danger = false, allowEmpty = false }) {
   return new Promise(res => {
     const m = $('#modal');
     m.innerHTML = `<div class="dlg" role="dialog" aria-modal="true"><h3>${esc(title)}</h3>${text ? `<p>${text}</p>` : ''}
@@ -604,13 +643,13 @@ function dialog({ title, text = '', input = null, type = 'text', ok = 'OK', dang
     m.classList.add('on');
     const inp = $('#dlgIn');
     if (inp) {
-      inp.value = '';
+      inp.select();
       inp.focus();
     } else {
       $('#dlgOk').focus();
     }
     const done = v => { m.classList.remove('on'); m.innerHTML = ''; m.onclick = m.onkeydown = null; res(v); };
-    const val = () => inp ? (inp.value.trim() || null) : true;
+    const val = () => inp ? (inp.value.trim() || (allowEmpty ? '' : null)) : true;
     m.onclick = e => { const b = e.target.closest('[data-r]'); if (b) done(b.dataset.r === '1' ? val() : null); else if (e.target === m) done(null); };
     m.onkeydown = e => { if (e.key === 'Escape') done(null); else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') done(val()); };
   });
@@ -641,21 +680,16 @@ async function openItem(id) {
 /* Code PIN & Partage */
 async function setPin(id) {
   const it = byId.get(id); if (!it) return;
-  if (it.pin && !(await verifyPinForItem(it))) return;
-  const pin = await dialog({ title: 'Code PIN de verrouillage', text: 'Entrez un code PIN pour bloquer la visibilité (laissez vide pour retirer) :', input: '', type: 'password', ok: 'Enregistrer' });
+  if (!(await verifyPinForItem(it))) return;
+  const pin = await dialog({ title: 'Code PIN de verrouillage', text: it.pin ? 'Nouveau code (laisse vide pour retirer le PIN) :' : 'Choisis un code : l\'élément sera masqué jusqu\'à ce que tu saisisses ce code avec le bouton 🔒.', input: '', type: 'password', ok: 'Enregistrer', allowEmpty: true });
   if (pin === null) return;
-  
-  const newPin = (pin === '' || !pin) ? null : pin.trim();
-  
+  const newPin = pin || null;
   const { error } = await sb.from('vault_items').update({ pin: newPin }).eq('id', id);
-  if (error) return toast(error.message, 'err');
-  
+  if (error) return toast(/pin/i.test(error.message) ? 'Colonne « pin » absente : relance le script SQL dans Supabase.' : error.message, 'err');
   it.pin = newPin;
-  if (!newPin) unlockedPins.delete(id);
-  
-  rebuild();
-  render();
-  toast(newPin ? 'Code PIN activé (élément masqué)' : 'Code PIN retiré');
+  unlockedPins.delete(id); sel.delete(id);
+  rebuild(); render();
+  toast(newPin ? 'Code PIN activé : élément masqué' : 'Code PIN retiré');
 }
 
 async function shareItem(id) {
@@ -707,10 +741,12 @@ $('#seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'
 $('#nav').addEventListener('click', e => {
   const b = e.target.closest('[data-nav]'); if (!b) return;
   onlyImages = b.dataset.nav === 'images'; query = ''; $('#q').value = '';
+  spaceCode = null;
   if (!onlyImages) { cur = null; location.hash = '#'; }
+  relock();
   render();
 });
-$('#q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
+$('#q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); spaceCode = null; relock(); render(); });
 $('#selClr').onclick = () => { sel.clear(); render(); };
 $('#selGet').onclick = () => restore([...sel]);
 $('#selDel').onclick = () => removeItems([...sel]);
@@ -770,7 +806,7 @@ async function rename(id) {
 async function removeItems(ids) {
   ids = ids.filter(id => byId.has(id)); if (!ids.length) return;
   for (const id of ids) {
-    if (!(await verifyPinForItem(byId.get(id)))) return;
+    if (!(await unlockSubtree(ids))) return;
   }
   const all = new Set(); ids.forEach(id => descendants(id, all));
   const files = [...all].map(id => byId.get(id)).filter(i => i.kind === 'file');
@@ -843,7 +879,7 @@ async function uploadJob(tree, parentId, title) {
   [...allDirs].sort((a,b)=>a.split('/').length-b.split('/').length).forEach(p=>{
     const parts=p.split('/');
     const parent=parts.length===1?parentId:dirIds.get(parts.slice(0,-1).join('/'));
-    const existing=items.find(x=>x.kind==='folder' && x.name===parts.at(-1) && (x.parent_id||null)===(parent||null));
+    const existing=items.find(x=>x.kind==='folder' && x.name===parts.at(-1) && !isLocked(x) && (x.parent_id||null)===(parent||null));
     const id=existing?existing.id:uid();dirIds.set(p,id);
     if(!existing)rows.push({id,user_id:user.id,parent_id:parent,kind:'folder',name:parts.at(-1),size:0,created_at:new Date().toISOString()});
   });
@@ -930,7 +966,7 @@ function flatten(targets) {
 async function restore(ids) {
   const targets = ids.map(i => byId.get(i)).filter(Boolean); if (!targets.length) return;
   for (const t of targets) {
-    if (!(await verifyPinForItem(t))) return;
+    if (!(await unlockSubtree(ids))) return;
   }
   if (targets.length === 1 && targets[0].kind === 'file') return downloadOne(targets[0]);
   const nodes = flatten(targets), fileNodes = nodes.filter(n => n.item.kind === 'file');
@@ -1098,7 +1134,10 @@ async function enter() {
     all = all.concat(data); if (data.length < 1000) break;
   }
   $('#job').classList.remove('on');
+  if (!all.length && !navigator.onLine) all = await cacheLoad(); else if (all.length) cacheSave(all);
   items = all; rebuild(); syncHash();
+  qAll().then(q => { if (q.length) toast(q.length + ' fichier(s) en attente' + (navigator.onLine ? '' : ' (hors ligne)')); }).catch(() => {});
+  flushQueue();
 }
 async function authDo(signup) {
   const email = $('#aMail').value.trim(), password = $('#aPass').value;
@@ -1107,12 +1146,12 @@ async function authDo(signup) {
   const r = signup ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
   if (r.error) { $('#aErr').textContent = r.error.message; return; }
   if (!r.data.session) { $('#aErr').textContent = 'Compte créé. Confirme ton e-mail, puis reviens te connecter.'; return; }
-  user = r.data.session.user; enter();
+  user = r.data.session.user; localStorage.setItem('vault.user', JSON.stringify({ id: user.id })); enter();
 }
 $('#aIn').onclick = () => authDo(false);
 $('#aUp').onclick = () => authDo(true);
 $('#aPass').addEventListener('keydown', e => { if (e.key === 'Enter') authDo(false); });
-$('#btnOut').onclick = async () => { await sb.auth.signOut(); location.hash = ''; location.reload(); };
+$('#btnOut').onclick = async () => { localStorage.removeItem('vault.user'); await sb.auth.signOut(); location.hash = ''; location.reload(); };
 
 /* ---------- GESTION DU MODE PARTAGE EXTERNE ---------- */
 async function handleSharedLink(itemId, expTimestamp) {
@@ -1142,7 +1181,8 @@ async function handleSharedLink(itemId, expTimestamp) {
         const isChild = (item) => {
           let p = item.parent_id;
           while (p) {
-            if (p === mainItem.id) return true;
+            if (p === mainItem.id) return !item.pin;
+            if (subMap.get(p)?.pin) return false;
             p = subMap.get(p)?.parent_id;
           }
           return false;
@@ -1201,7 +1241,7 @@ sendOne = async function(task,parentId) {
   task.ok=false; task.skipped=false;
   const file=task.file || await task.handle.getFile();
   const hash=await contentHash(file);
-  for(const it of items.filter(x=>x.kind==='file' && Number(x.size)===file.size)) {
+  for(const it of items.filter(x=>x.kind==='file' && !isLocked(x) && Number(x.size)===file.size)) {
     if(await storedHash(it)===hash) {
       task.skipped=true; task.existingId=it.id; task.size=file.size; return;
     }
@@ -1234,7 +1274,7 @@ async function cleanVaultDuplicates(){return enqueueVault(async()=>{
   try{
     await refreshVaultFiles();
     const groups=new Map(), duplicates=[];
-    const files=items.filter(x=>x.kind==='file').sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
+    const files=items.filter(x=>x.kind==='file' && !isLocked(x)).sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
     const sizes=new Map();for(const f of files)sizes.set(String(f.size),(sizes.get(String(f.size))||0)+1);
     let n=0;
     for(const f of files){
@@ -1262,6 +1302,66 @@ async function cleanVaultDuplicates(){return enqueueVault(async()=>{
 });}
 const cleanButton=document.createElement('button');cleanButton.className='btn';cleanButton.textContent='Analyser les doublons';cleanButton.onclick=cleanVaultDuplicates;$('#btnAdd').parentElement.before(cleanButton);
 
+$('#btnLock').onclick = async () => {
+  if (spaceCode) { spaceCode = null; relock(); render(); return; }
+  const v = await dialog({ title: 'Espace protégé', text: 'Entre ton code pour afficher les éléments protégés.', input: '', type: 'password', ok: 'Ouvrir' });
+  if (v === null) return;
+  if (!pinHits(v).length) return toast('Code PIN incorrect', 'err');
+  onlyImages = false; view = 'files'; filter = 'all'; query = ''; $('#q').value = ''; sel.clear();
+  spaceCode = v;
+  if (cur) { cur = null; history.pushState(null, '', location.pathname + location.search); }
+  relock(); render();
+};
+
+/* ---------- mode hors ligne : application installable + file d'envoi ---------- */
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+const idbP = new Promise((res, rej) => {
+  const r = indexedDB.open('vault-offline', 1);
+  r.onupgradeneeded = () => { r.result.createObjectStore('queue', { keyPath: 'id' }); r.result.createObjectStore('cache'); };
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+});
+const idbTx = (store, mode, fn) => idbP.then(db => new Promise((res, rej) => {
+  const t = db.transaction(store, mode); const q = fn(t.objectStore(store));
+  t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+}));
+const qAll = () => idbTx('queue', 'readonly', s => s.getAll());
+const qPut = e => idbTx('queue', 'readwrite', s => s.put(e));
+const qDel = id => idbTx('queue', 'readwrite', s => s.delete(id));
+const cacheSave = v => idbTx('cache', 'readwrite', s => s.put(v, 'items:' + user.id)).catch(() => {});
+const cacheLoad = () => idbTx('cache', 'readonly', s => s.get('items:' + user.id)).then(v => v || []).catch(() => []);
+
+const onlineUploadJob = uploadJob;
+uploadJob = async function (tree, parentId, title) {
+  if (navigator.onLine) return onlineUploadJob(tree, parentId, title);
+  let n = 0;
+  for (const t of tree.files) {
+    try {
+      const file = t.file || await t.handle.getFile();
+      await qPut({ id: uid(), parentId: parentId || null, dirs: t.dirs || [], name: t.name || file.name, file });
+      n++;
+    } catch (e) { console.error(e); }
+  }
+  toast(n + ' fichier(s) gardés hors ligne : envoi automatique au retour du réseau.');
+  return { failed: tree.files.map(t => ({ t, e: 'hors ligne' })), ok: [] };
+};
+let flushing = false;
+async function flushQueue() {
+  if (flushing || !navigator.onLine || !sb) return;
+  const all = await qAll().catch(() => []); if (!all.length) return;
+  const { data: { session } } = await sb.auth.getSession(); if (!session) return;
+  user = session.user; flushing = true;
+  try {
+    const groups = new Map();
+    for (const e of all) { const k = e.parentId || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); }
+    for (const [k, list] of groups) {
+      const files = list.map(e => ({ file: e.file, name: e.name, dirs: e.dirs, qid: e.id }));
+      await onlineUploadJob({ files, dirs: [] }, k || null, 'Envoi des fichiers en attente');
+      for (const t of files) if (t.ok || t.skipped) await qDel(t.qid);
+    }
+  } finally { flushing = false; }
+}
+addEventListener('online', flushQueue);
+
 (async function boot() {
   try { cfg = JSON.parse(localStorage.getItem('vault.cfg') || 'null'); } catch { cfg = null; }
   if (!cfg) return showSetup();
@@ -1275,7 +1375,9 @@ const cleanButton=document.createElement('button');cleanButton.className='btn';c
   }
 
   const { data: { session } } = await sb.auth.getSession();
-  if (session) { user = session.user; enter(); } else show('auth');
+  if (session) { user = session.user; localStorage.setItem('vault.user', JSON.stringify({ id: user.id })); enter(); }
+  else if (!navigator.onLine && localStorage.getItem('vault.user')) { user = JSON.parse(localStorage.getItem('vault.user')); enter(); }
+  else show('auth');
 })();
 </script>
 </body>
